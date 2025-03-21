@@ -1,0 +1,284 @@
+local Luminosity = loadstring(game:HttpGet("https://raw.githubusercontent.com/iHavoc101/Genesis-Studios/main/UserInterface/Luminosity.lua", true))()
+
+local Window = Luminosity.new("Luminosity UI", "v1.0.0", 4370345701)
+
+local Tab1 = Window.Tab("ESP", 6026568198)
+local Folder = Tab1.Folder("Money ESP", "Options for Money ESP")
+
+-- Gerekli servisleri al
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
+
+local espEnabled = false
+local tracersEnabled = true
+local espParts = {}
+local tracers = {}
+local attachments = {}
+local childAddedConnection
+local distanceUpdateConnection
+local refreshRate = 1.0 -- Yenileme hızı saniye cinsinden
+local lastRefresh = 0
+
+-- Para sistemini bul
+local cashSystem = game.Workspace:FindFirstChild("Cash System") or game.Workspace:FindFirstChild("b\007\010\007\010\007")
+
+if not cashSystem then
+    warn("Cash System klasörü bulunamadı!")
+    return
+end
+
+-- En yakın parayı bulma fonksiyonu
+local function findClosestMoney()
+    local closestMoney = nil
+    local shortestDistance = math.huge
+
+    for _, money in ipairs(cashSystem:GetChildren()) do
+        if money:IsA("BasePart") and money.CanCollide then
+            local distance = (money.Position - humanoidRootPart.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestMoney = money
+            end
+        end
+    end
+
+    return closestMoney, shortestDistance
+end
+
+-- Tracer (Çizgi) oluşturma fonksiyonu
+local function createTracer(targetPart)
+    if not targetPart or not tracersEnabled then return end
+
+    -- Eğer eski tracer varsa sil
+    if tracers[targetPart] then
+        tracers[targetPart]:Destroy()
+        tracers[targetPart] = nil
+    end
+
+    -- Yeni Tracer ve Attachments
+    local attachment0 = Instance.new("Attachment", humanoidRootPart)
+    local attachment1 = Instance.new("Attachment", targetPart)
+    local tracer = Instance.new("Beam")
+    tracer.Attachment0 = attachment0
+    tracer.Attachment1 = attachment1
+    tracer.Color = ColorSequence.new(Color3.new(1, 0, 0), Color3.new(0, 1, 0)) -- Kırmızıdan yeşile geçiş
+    tracer.Transparency = NumberSequence.new(0.2) -- Hafif şeffaflık
+    tracer.Width0 = 0.2
+    tracer.Width1 = 0.1
+    tracer.LightEmission = 0.7
+    tracer.Parent = humanoidRootPart
+
+    tracers[targetPart] = tracer
+    attachments[targetPart] = {attachment0, attachment1}
+end
+
+-- ESP oluşturma fonksiyonu
+local function createESPPart(part)
+    if not part:IsA("BasePart") or not part.CanCollide then return end
+    if part:FindFirstChild("ESPAdornment") then return end
+
+    -- Highlight (Neon Efekti)
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(0, 255, 150)
+    highlight.OutlineColor = Color3.fromRGB(0, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.FillTransparency = 0.4
+    highlight.Parent = part
+
+    -- Billboard GUI (Etiket)
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Size = UDim2.new(0, 150, 0, 50)
+    billboardGui.StudsOffset = Vector3.new(0, part.Size.Y + 1, 0)
+    billboardGui.AlwaysOnTop = true
+    billboardGui.Adornee = part
+    billboardGui.Name = "MoneyLabel"
+    billboardGui.Parent = part
+
+    -- Ana metin (AMBURDA)
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = "AMBURDA"
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextScaled = true
+    textLabel.Parent = billboardGui
+
+    -- UIStroke (Kenarlık)
+    local textStroke = Instance.new("UIStroke")
+    textStroke.Thickness = 2
+    textStroke.Color = Color3.new(0, 0, 0)
+    textStroke.Parent = textLabel
+
+    -- Mesafe etiketi
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    distanceLabel.Font = Enum.Font.GothamBold
+    distanceLabel.TextScaled = true
+    distanceLabel.Parent = billboardGui
+
+    -- UIGradient (Renk geçişi efekti)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0))
+    gradient.Parent = distanceLabel
+
+    -- Mesafe güncelleme fonksiyonu
+    local function updateDistance()
+        if humanoidRootPart then
+            local distance = (part.Position - humanoidRootPart.Position).Magnitude
+            distanceLabel.Text = string.format("%.1f m", distance / 5)
+        end
+    end
+
+    -- RenderStepped üzerinden sürekli güncelle
+    distanceUpdateConnection = runService.RenderStepped:Connect(updateDistance)
+    updateDistance()
+
+    -- Parçaya dokunma olayı ekleme
+    part.Touched:Connect(function(hit)
+        if part:FindFirstChild("Highlight") then
+            part.Highlight:Destroy()
+        end
+        if part:FindFirstChild("MoneyLabel") then
+            part.MoneyLabel:Destroy()
+        end
+        if part:FindFirstChild("ESPAdornment") then
+            part.ESPAdornment:Destroy()
+        end
+        if tracers[part] then
+            tracers[part]:Destroy()
+            tracers[part] = nil
+        end
+        if attachments[part] then
+            for _, attachment in ipairs(attachments[part]) do
+                attachment:Destroy()
+            end
+            attachments[part] = nil
+        end
+    end)
+
+    return highlight
+end
+
+-- ESP aç/kapat fonksiyonu
+local function toggleESP()
+
+    if espEnabled then
+        for _, money in ipairs(cashSystem:GetChildren()) do
+            if money:IsA("BasePart") and money.CanCollide then
+                createESPPart(money)
+            end
+        end
+
+        -- Yeni paralar eklendikçe ESP ekle
+        childAddedConnection = cashSystem.ChildAdded:Connect(function(child)
+            if espEnabled and child:IsA("BasePart") and child.CanCollide then
+                createESPPart(child)
+            end
+        end)
+    else
+        for _, part in ipairs(cashSystem:GetChildren()) do
+            if part:FindFirstChild("Highlight") then
+                part.Highlight:Destroy()
+            end
+            if part:FindFirstChild("MoneyLabel") then
+                part.MoneyLabel:Destroy()
+            end
+            if part:FindFirstChild("ESPAdornment") then
+                part.ESPAdornment:Destroy()
+            end
+        end
+
+        -- Tracer ve attachmentları temizle
+        for _, tracer in pairs(tracers) do
+            if tracer then tracer:Destroy() end
+        end
+        tracers = {}
+        for _, attachmentSet in pairs(attachments) do
+            for _, attachment in ipairs(attachmentSet) do
+                attachment:Destroy()
+            end
+        end
+        attachments = {}
+
+        -- Bağlantıları temizle
+        if childAddedConnection then
+            childAddedConnection:Disconnect()
+            childAddedConnection = nil
+        end
+        if distanceUpdateConnection then
+            distanceUpdateConnection:Disconnect()
+            distanceUpdateConnection = nil
+        end
+    end
+end
+
+-- Tracers aç/kapat fonksiyonu
+local function toggleTracers()
+
+    if not tracersEnabled then
+        for _, tracer in pairs(tracers) do
+            if tracer then tracer:Destroy() end
+        end
+        tracers = {}
+        for _, attachmentSet in pairs(attachments) do
+            for _, attachment in ipairs(attachmentSet) do
+                attachment:Destroy()
+            end
+        end
+        attachments = {}
+    end
+end
+
+-- En yakın paraya otomatik tracer ekle
+runService.Heartbeat:Connect(function()
+    if espEnabled and tracersEnabled then
+        if tick() - lastRefresh >= refreshRate then
+            lastRefresh = tick()
+            local closestMoney, _ = findClosestMoney()
+            if closestMoney then
+                -- Önceki tracerları sil
+                for _, tracer in pairs(tracers) do
+                    if tracer then tracer:Destroy() end
+                end
+                tracers = {}
+                for _, attachmentSet in pairs(attachments) do
+                    for _, attachment in ipairs(attachmentSet) do
+                        attachment:Destroy()
+                    end
+                end
+                attachments = {}
+
+                -- ESP ve Tracer ekle
+                if closestMoney:FindFirstChild("MoneyLabel") then
+                    createTracer(closestMoney)
+                else
+                    createESPPart(closestMoney)
+                    createTracer(closestMoney)
+                end
+            end
+        end
+    end
+end)
+
+-- UI ile ESP ve Tracers aç/kapat fonksiyonu
+Folder.Toggle("Enable ESP", function(Status)
+    espEnabled = Status
+    toggleESP()
+end)
+Folder.Toggle("Enable Tracers", function(Status)
+    tracersEnabled = Status
+    toggleTracers()
+end)
+
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.F and not gameProcessed then
+        Window:Toggle()
+    end
+end)
