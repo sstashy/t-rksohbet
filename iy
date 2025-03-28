@@ -306,7 +306,7 @@ ReferenceButton.Parent = Holder
 ReferenceButton.BackgroundTransparency = 1
 ReferenceButton.Position = UDim2.new(0, 212, 0, 2)
 ReferenceButton.Size = UDim2.new(0, 16, 0, 16)
-ReferenceButton.Image = "rbxassetid://101919294911541"
+ReferenceButton.Image = "rbxassetid://95740685103989"
 ReferenceButton.ZIndex = 10
 
 Settings.Name = "Settings"
