@@ -10198,7 +10198,7 @@ end)
 
 addcmd('explorer', {'dex'}, function(args, speaker)
 	notify('Loading', 'Hold on a sec')
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/sstashy/t-rksohbet/refs/heads/main/dex?token=GHSAT0AAAAAAC2IH7SEMITUKNLMPIV6L2KUZ7F6IGQ"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/sstashy/t-rksohbet/refs/heads/main/dex"))()
 end)
 
 addcmd('olddex', {'odex'}, function(args, speaker)
